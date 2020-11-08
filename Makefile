@@ -1,4 +1,7 @@
 
+DATA_DIR ?= "test"
+
 test:
-	./pyphori.py
+	./pyphori.py -d ${DATA_DIR}
+	
 	

@@ -1,5 +1,15 @@
 #!/usr/bin/python3
 import argparse
+import hashlib
+import os
+
+def md5(fname):
+    hash_md5 = hashlib.md5()
+    with open(fname, "rb") as f:
+        for chunk in iter(lambda: f.read(4096), b""):
+#        for chunk in iter(lambda: f.read(65536), b""):
+            hash_md5.update(chunk)
+    return hash_md5.hexdigest()
 
 def main():
     print("\nPython Photo Rename and Indexing Script\n")
@@ -15,6 +25,23 @@ def main():
     
     args = parser.parse_args()
 
+
+    num_files = 0
+    if args.data_dir is not None:
+        
+        print("\nopening data_dir : {}\n".format(args.data_dir))
+        
+        for root, dirs, files in os.walk(args.data_dir):
+            for file in files:
+                print("  process file: {}".format(file))
+                print("      number: {}".format(num_files))
+                print("      root:   {}".format(root))
+                print("      md5:    {}".format(md5(root+'/'+file)))
+                print("\n")
+                num_files = num_files + 1;
+                
+    print("\nnumber of files processed: {}".format(num_files))
+    
 
 #=============
 # main program
