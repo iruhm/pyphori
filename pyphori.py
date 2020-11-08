@@ -1,7 +1,8 @@
-#!/usr/bin/python3
+#!/usr/bin/python
 import argparse
 import hashlib
 import os
+import pyexiv2
 
 def md5(fname):
     hash_md5 = hashlib.md5()
@@ -37,6 +38,16 @@ def main():
                 print("      number: {}".format(num_files))
                 print("      root:   {}".format(root))
                 print("      md5:    {}".format(md5(root+'/'+file)))
+                
+                try:
+                    metadata = pyexiv2.ImageMetadata(root+'/'+file)
+                    metadata.read()
+                    exif_out = metadata['Exif.Photo.DateTimeOriginal'].value
+                    creation_date_time = str(exif_out)
+                    print("      date:   {}".format(creation_date_time))
+                except:
+                    pass
+                
                 print("\n")
                 num_files = num_files + 1;
                 
