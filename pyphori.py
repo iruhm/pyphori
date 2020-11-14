@@ -1,10 +1,13 @@
 #!/usr/bin/python
+# -*- coding: utf-8 -*-
+
 import argparse
 import hashlib
 import os
 import pyexiv2
 import sqlite3
 import pandas as pd
+import io
 
 def md5(fname):
     hash_md5 = hashlib.md5()
@@ -22,8 +25,17 @@ def main():
     parser.add_argument("-d",
                         "--data_dir",
                         type = str,
-                        help = "data directory that contains the photos",
-                        required = True)
+                        help = "data directory that contains the photos")
+    
+    parser.add_argument("-t",
+                        "--transfer_dir",
+                        type = str,
+                        help = "directory where new photos are uploaded for renaming and indexing")
+    
+    parser.add_argument("-e",
+                        "--export",
+                        type = str,
+                        help = "export database as text")
     
     parser.add_argument("--database",
                         type = str,
@@ -47,7 +59,9 @@ def main():
             database = sqlite3.connect(args.database)
             cursor = database.cursor()
             sql = "CREATE TABLE media(" \
-                    "filename TEXT PRIMARY KEY, " \
+                    "file_id INTEGER PRIMARY KEY AUTOINCREMENT, " \
+                    "filename TEXT, " \
+                    "full_filename TEXT, " \
                     "md5 TEXT, " \
                     "date TEXT )"
             cursor.execute(sql)
@@ -59,6 +73,20 @@ def main():
         
         sys.exit("\nPlease specify a database")
             
+    if args.export is not None:
+        
+        print("\nexporting database to file : {}\n".format(args.export))
+        with io.open(args.export, mode="w", encoding="UTF8") as fd:
+       
+            cursor.execute("SELECT * FROM media")
+            for row in cursor:
+                print(row)
+                print(row[1])
+                fd.write(u"{:10} {:35} {:40}\t{}\n".format(row[0],row[3],row[1],row[2]))
+        
+        fd.close() 
+
+        
 
     num_files = 0
     if args.data_dir is not None:
@@ -95,7 +123,11 @@ def main():
                         print("   status:    file changed since last indexing")
                 except:
                     print("   status:    adding to database")
-                    sql = "INSERT INTO media VALUES('{}','{}','{}')".format(filename,md5_str,creation_date_time)
+                    sql = "INSERT INTO media(filename,full_filename,md5,date) VALUES('{}','{}','{}','{}')".format(file,
+                                                                                 filename,
+                                                                                 md5_str,
+                                                                                 creation_date_time)
+                    print(sql)
                     cursor.execute(sql)
                     database.commit()
 
