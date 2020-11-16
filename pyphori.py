@@ -8,6 +8,7 @@ import pyexiv2
 import sqlite3
 import pandas as pd
 import io
+import re
 
 def md5(fname):
     hash_md5 = hashlib.md5()
@@ -82,7 +83,7 @@ def main():
             for row in cursor:
                 print(row)
                 print(row[1])
-                fd.write(u"{:10} {:35} {:40}\t{}\n".format(row[0],row[3],row[1],row[2]))
+                fd.write(u"{:10} {:35} {:40} {:20}\t{}\n".format(row[0],row[3],row[1],row[4],row[2]))
         
         fd.close() 
 
@@ -102,28 +103,42 @@ def main():
                 print("      root:   {}".format(root))
                 print("      md5:    {}".format(md5_str))
                 
-                creation_date_time = "unkown"
+                if args.transfer_dir is not None and root.startswith(args.transfer_dir):
+                    print("      type:  new file")
+                
+                creation_date_time = None
                 try:
                     metadata = pyexiv2.ImageMetadata(root+'/'+file)
                     metadata.read()
                     exif_out = metadata['Exif.Photo.DateTimeOriginal'].value
                     creation_date_time = str(exif_out)
                     print("      date:   {}".format(creation_date_time))
+                    
+                    date_time_extract = re.match (r"(.*)-(.*)-(.*)\s(.*)",creation_date_time)
+                    year= date_time_extract.group(1)
+                    month=date_time_extract.group(2)
+                    day=  date_time_extract.group(3)
+                    #date_str=date_time_extract.group(1)
+                    print("      year:   {}".format(year))
+                    print("      month:  {}".format(month))
+                    print("      day:    {}".format(day))
+                    
                 except:
                     pass
                 
                 db_md5 = pd.read_sql_query(
-                             "SELECT md5 FROM media WHERE(filename='{}')".format(filename),
+                             "SELECT md5 FROM media WHERE(full_filename='{}')".format(filename),
                              database)
                 
                 try:
                     if db_md5.at[0,'md5'] == md5_str:
-                        print("   status:    found in database")
+                        print("      status: found in database")
                     else:
-                        print("   status:    file changed since last indexing")
+                        print("      status: file changed since last indexing")
                 except:
-                    print("   status:    adding to database")
-                    sql = "INSERT INTO media(filename,full_filename,md5,date) VALUES('{}','{}','{}','{}')".format(file,
+                    print("      status: adding to database")
+                    sql = "INSERT INTO media(filename,full_filename,md5,date) VALUES('{}','{}','{}','{}')".format(
+                                                                                 file,
                                                                                  filename,
                                                                                  md5_str,
                                                                                  creation_date_time)

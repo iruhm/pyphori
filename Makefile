@@ -1,8 +1,10 @@
 
 DATA_DIR ?= "test"
 
+TRANSFER_DIR ?= "test/upload"
+
 test:
-	./pyphori.py -d ${DATA_DIR} --database pyphori.db
+	./pyphori.py -d ${DATA_DIR} -t ${TRANSFER_DIR} --database pyphori.db
 	
 
 export:
