@@ -9,6 +9,7 @@ import sqlite3
 import pandas as pd
 import io
 import re
+import time
 
 def md5(fname):
     hash_md5 = hashlib.md5()
@@ -64,7 +65,12 @@ def main():
                     "filename TEXT, " \
                     "full_filename TEXT, " \
                     "md5 TEXT, " \
-                    "date TEXT )"
+                    "year INTEGER, " \
+                    "month INTEGER, " \
+                    "day INTEGER, "\
+                    "time TEXT, "\
+                    "filetype TEXT, "\
+                    "scanned INTEGER)"
             cursor.execute(sql)
 
         database = sqlite3.connect(args.database)
@@ -83,12 +89,13 @@ def main():
             for row in cursor:
                 print(row)
                 print(row[1])
-                fd.write(u"{:10} {:35} {:40} {:20}\t{}\n".format(row[0],row[3],row[1],row[4],row[2]))
+                fd.write(u"{:8} {:32} {:4}{:3}{:3} {:8} {:8} {:3} {:40}\t{}\n".format(row[0],row[3],row[4],row[5],row[6],row[7],row[9],row[8],row[1],row[2]))
         
         fd.close() 
 
-        
-
+    # get current time stamp for updating files in the database that were found    
+    scan_ts = int(time.time())
+    
     num_files = 0
     if args.data_dir is not None:
         
@@ -99,29 +106,42 @@ def main():
                 filename = root+'/'+file
                 md5_str = md5(filename)
                 print("  process file: {}".format(file))
-                print("      number: {}".format(num_files))
-                print("      root:   {}".format(root))
-                print("      md5:    {}".format(md5_str))
+                print("      number:   {}".format(num_files))
+                print("      root:     {}".format(root))
+                print("      md5:      {}".format(md5_str))
                 
                 if args.transfer_dir is not None and root.startswith(args.transfer_dir):
                     print("      type:  new file")
+                    
+                filetype = None
+                try:
+                    filename_extract = re.match (r"(.*)\.(.*)$",file)
+                    filetype = filename_extract.group(2).lower()
+                except:
+                    pass
+                print("      filetype: {}".format(filetype))
                 
                 creation_date_time = None
+                cyear  = -1
+                cmonth = -1
+                cday   = -1
+                ctime  = None
                 try:
                     metadata = pyexiv2.ImageMetadata(root+'/'+file)
                     metadata.read()
                     exif_out = metadata['Exif.Photo.DateTimeOriginal'].value
                     creation_date_time = str(exif_out)
-                    print("      date:   {}".format(creation_date_time))
+                    print("      date:     {}".format(creation_date_time))
                     
                     date_time_extract = re.match (r"(.*)-(.*)-(.*)\s(.*)",creation_date_time)
-                    year= date_time_extract.group(1)
-                    month=date_time_extract.group(2)
-                    day=  date_time_extract.group(3)
-                    #date_str=date_time_extract.group(1)
-                    print("      year:   {}".format(year))
-                    print("      month:  {}".format(month))
-                    print("      day:    {}".format(day))
+                    cyear  = int(date_time_extract.group(1))
+                    cmonth = int(date_time_extract.group(2))
+                    cday   = int(date_time_extract.group(3))
+                    ctime  = date_time_extract.group(4)
+                    print("      year:     {}".format(cyear))
+                    print("      month:    {}".format(cmonth))
+                    print("      day:      {}".format(cday))
+                    print("      time:     {}".format(ctime))
                     
                 except:
                     pass
@@ -132,16 +152,36 @@ def main():
                 
                 try:
                     if db_md5.at[0,'md5'] == md5_str:
-                        print("      status: found in database")
+                        print("      status:   found in database")
+                        sql = "UPDATE media SET scanned = {} WHERE (full_filename='{}')".format(scan_ts,filename)
+                        print(sql)
+                        cursor.execute(sql)
+                        database.commit()
                     else:
-                        print("      status: file changed since last indexing")
+                        print("      status:   file changed since last indexing")
+                        # ToDo: check if file was renamed; if not store old md5 as deleted file
                 except:
-                    print("      status: adding to database")
-                    sql = "INSERT INTO media(filename,full_filename,md5,date) VALUES('{}','{}','{}','{}')".format(
+                    print("      status:   adding to database")
+                    sql = "INSERT INTO media( filename, "\
+                                             "full_filename, "\
+                                             "md5, "\
+                                             "year, "\
+                                             "month, "\
+                                             "day, "\
+                                             "time, "\
+                                             "filetype, "\
+                                             "scanned ) "\
+                                             " VALUES( '{}','{}','{}','{}',"\
+                                                      "'{}','{}','{}','{}','{}')".format(
                                                                                  file,
                                                                                  filename,
                                                                                  md5_str,
-                                                                                 creation_date_time)
+                                                                                 cyear,
+                                                                                 cmonth,
+                                                                                 cday,
+                                                                                 ctime,
+                                                                                 filetype,
+                                                                                 scan_ts)
                     print(sql)
                     cursor.execute(sql)
                     database.commit()
