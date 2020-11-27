@@ -11,6 +11,10 @@ import io
 import re
 import time
 
+GLOBAL_TYPE_ARCHIVED = 0
+GLOBAL_TYPE_UPLOADED = 1
+GLOBAL_TYPE_DELETED  = 2
+
 def md5(fname):
     hash_md5 = hashlib.md5()
     with open(fname, "rb") as f:
@@ -70,7 +74,8 @@ def main():
                     "day INTEGER, "\
                     "time TEXT, "\
                     "filetype TEXT, "\
-                    "scanned INTEGER)"
+                    "scanned INTEGER, "\
+                    "type INTEGER)"
             cursor.execute(sql)
 
         database = sqlite3.connect(args.database)
@@ -89,7 +94,7 @@ def main():
             for row in cursor:
                 print(row)
                 print(row[1])
-                fd.write(u"{:8} {:32} {:4}{:3}{:3} {:8} {:8} {:3} {:40}\t{}\n".format(row[0],row[3],row[4],row[5],row[6],row[7],row[9],row[8],row[1],row[2]))
+                fd.write(u"{:8} {:32} {:4}{:3}{:3} {:8} {:8} {:3} {:1} {:40}\t{}\n".format(row[0],row[3],row[4],row[5],row[6],row[7],row[9],row[8],row[10],row[1],row[2]))
         
         fd.close() 
 
@@ -110,8 +115,11 @@ def main():
                 print("      root:     {}".format(root))
                 print("      md5:      {}".format(md5_str))
                 
+                type = GLOBAL_TYPE_ARCHIVED
                 if args.transfer_dir is not None and root.startswith(args.transfer_dir):
                     print("      type:  new file")
+                    type = GLOBAL_TYPE_UPLOADED
+                
                     
                 filetype = None
                 try:
@@ -120,6 +128,10 @@ def main():
                 except:
                     pass
                 print("      filetype: {}".format(filetype))
+                
+                if not (filetype in ['jpg','mp4','avi','mov']):
+                    print("{} skipped".format(filename))
+                    continue
                 
                 creation_date_time = None
                 cyear  = -1
@@ -170,8 +182,9 @@ def main():
                                              "day, "\
                                              "time, "\
                                              "filetype, "\
-                                             "scanned ) "\
-                                             " VALUES( '{}','{}','{}','{}',"\
+                                             "scanned, "\
+                                             "type ) "\
+                                             " VALUES( '{}','{}','{}','{}','{}',"\
                                                       "'{}','{}','{}','{}','{}')".format(
                                                                                  file,
                                                                                  filename,
@@ -181,7 +194,8 @@ def main():
                                                                                  cday,
                                                                                  ctime,
                                                                                  filetype,
-                                                                                 scan_ts)
+                                                                                 scan_ts,
+                                                                                 type)
                     print(sql)
                     cursor.execute(sql)
                     database.commit()
