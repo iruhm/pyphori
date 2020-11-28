@@ -43,6 +43,11 @@ def main():
                         type = str,
                         help = "export database as text")
     
+    parser.add_argument("-s",
+                        "--script",
+                        type = str,
+                        help = "generate rename and remove script")
+    
     parser.add_argument("--database",
                         type = str,
                         help = "database file",
@@ -75,7 +80,8 @@ def main():
                     "time TEXT, "\
                     "filetype TEXT, "\
                     "scanned INTEGER, "\
-                    "type INTEGER)"
+                    "type INTEGER, "\
+                    "id INTEGER )"
             cursor.execute(sql)
 
         database = sqlite3.connect(args.database)
@@ -94,10 +100,35 @@ def main():
             for row in cursor:
                 print(row)
                 print(row[1])
-                fd.write(u"{:8} {:32} {:4}{:3}{:3} {:8} {:8} {:3} {:1} {:40}\t{}\n".format(row[0],row[3],row[4],row[5],row[6],row[7],row[9],row[8],row[10],row[1],row[2]))
+                fd.write(u"{:8} {:32} {:4}{:3}{:3} {:8} {:8} {:3} {:3} {:1} {:40}\t{}\n".format(row[0],row[3],row[4],row[5],row[6],row[7],row[9],row[8],row[10],row[11],row[1],row[2]))
         
         fd.close() 
 
+    if args.script is not None:
+        print("\ngenerate rename and remove script\n")
+
+        with io.open(args.script, mode="w", encoding="UTF8") as fd:
+       
+            fd.write(u"#!/bin/bash\n")
+            fd.write(u"echo \"test\"\n")
+
+            upload_list = pd.read_sql_query(
+                             "SELECT * FROM media WHERE(type='{}')".format(GLOBAL_TYPE_UPLOADED),
+                             database)
+            for index,row in upload_list.iterrows():
+                print("processing file: {}".format(row['filename']))
+                print("    md5 : {}".format(row['md5']))
+
+                dup_list = pd.read_sql_query(
+                             "SELECT * FROM media WHERE( type='{}' AND md5='{}' )".format(GLOBAL_TYPE_ARCHIVED,row['md5']),
+                             database)
+                for i2,dup_row in dup_list.iterrows():
+                    print(u"    duplicate : {}".format(dup_row['full_filename']))
+                    
+        
+        fd.close() 
+        
+        
     # get current time stamp for updating files in the database that were found    
     scan_ts = int(time.time())
     
@@ -158,9 +189,13 @@ def main():
                 except:
                     pass
                 
-                db_md5 = pd.read_sql_query(
+                try:
+                    db_md5 = pd.read_sql_query(
                              "SELECT md5 FROM media WHERE(full_filename='{}')".format(filename),
                              database)
+                except:
+                    print("Error: could not extract md5 from database for {}".format(filename))
+                    continue
                 
                 try:
                     if db_md5.at[0,'md5'] == md5_str:
@@ -173,30 +208,35 @@ def main():
                         print("      status:   file changed since last indexing")
                         # ToDo: check if file was renamed; if not store old md5 as deleted file
                 except:
-                    print("      status:   adding to database")
-                    sql = "INSERT INTO media( filename, "\
-                                             "full_filename, "\
-                                             "md5, "\
-                                             "year, "\
-                                             "month, "\
-                                             "day, "\
-                                             "time, "\
-                                             "filetype, "\
-                                             "scanned, "\
-                                             "type ) "\
-                                             " VALUES( '{}','{}','{}','{}','{}',"\
-                                                      "'{}','{}','{}','{}','{}')".format(
-                                                                                 file,
-                                                                                 filename,
-                                                                                 md5_str,
-                                                                                 cyear,
-                                                                                 cmonth,
-                                                                                 cday,
-                                                                                 ctime,
-                                                                                 filetype,
-                                                                                 scan_ts,
-                                                                                 type)
-                    print(sql)
+                    try:
+                        print("      status:   adding to database")
+                        sql = "INSERT INTO media( filename, "\
+                                                 "full_filename, "\
+                                                 "md5, "\
+                                                 "year, "\
+                                                 "month, "\
+                                                 "day, "\
+                                                 "time, "\
+                                                 "filetype, "\
+                                                 "scanned, "\
+                                                 "type, "\
+                                                 "id ) "\
+                                                 " VALUES( '{}','{}','{}','{}','{}',"\
+                                                          "'{}','{}','{}','{}','{}','{}')".format(
+                                                                                     file,
+                                                                                     filename,
+                                                                                     md5_str,
+                                                                                     cyear,
+                                                                                     cmonth,
+                                                                                     cday,
+                                                                                     ctime,
+                                                                                     filetype,
+                                                                                     scan_ts,
+                                                                                     type,
+                                                                                     -1)
+                    except:
+                        print("Error: could not execute".format(sql))
+#                    print(sql)
                     cursor.execute(sql)
                     database.commit()
 
