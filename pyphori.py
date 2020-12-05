@@ -15,6 +15,13 @@ GLOBAL_TYPE_ARCHIVED = 0
 GLOBAL_TYPE_UPLOADED = 1
 GLOBAL_TYPE_DELETED  = 2
 
+def escape_fname(fname):
+    escaped_string = fname
+    escaped_string = escaped_string.replace(" ","\ ")
+    escaped_string = escaped_string.replace("(","\(")
+    escaped_string = escaped_string.replace(")","\)")
+    return escaped_string
+
 def md5(fname):
     hash_md5 = hashlib.md5()
     with open(fname, "rb") as f:
@@ -22,6 +29,25 @@ def md5(fname):
 #        for chunk in iter(lambda: f.read(65536), b""):
             hash_md5.update(chunk)
     return hash_md5.hexdigest()
+
+def update_db(database):
+    print("\nupdate database\n")
+    
+def export_db(database,filename):
+    print("\nexport database to file {}\n".format(filename))
+    cursor = database.cursor()
+
+    with io.open(filename, mode="w", encoding="UTF8") as fd:
+        cursor.execute("SELECT * FROM media")
+        for row in cursor:
+            print(row)
+            try:
+                print(u"{}".format(row[1]))
+            except:
+                pass
+            fd.write(u"{:8} {:32} {:4}{:3}{:3} {:8} {:8} {:3} {:3} {:1} {:40}\t{}\n".format(row[0],row[3],row[4],row[5],row[6],row[7],row[9],row[8],row[10],row[11],row[1],row[2]))
+    
+    fd.close() 
 
 def main():
     print("\nPython Photo Rename and Indexing Script\n")
@@ -47,6 +73,10 @@ def main():
                         "--script",
                         type = str,
                         help = "generate rename and remove script")
+    
+    parser.add_argument("-u",
+                        "--update_db", action='store_true',
+                        help = "update database")
     
     parser.add_argument("--database",
                         type = str,
@@ -92,17 +122,8 @@ def main():
         sys.exit("\nPlease specify a database")
             
     if args.export is not None:
-        
-        print("\nexporting database to file : {}\n".format(args.export))
-        with io.open(args.export, mode="w", encoding="UTF8") as fd:
-       
-            cursor.execute("SELECT * FROM media")
-            for row in cursor:
-                print(row)
-                print(row[1])
-                fd.write(u"{:8} {:32} {:4}{:3}{:3} {:8} {:8} {:3} {:3} {:1} {:40}\t{}\n".format(row[0],row[3],row[4],row[5],row[6],row[7],row[9],row[8],row[10],row[11],row[1],row[2]))
-        
-        fd.close() 
+        export_db(database,args.export)
+
 
     if args.script is not None:
         print("\ngenerate rename and remove script\n")
@@ -119,13 +140,27 @@ def main():
                 print("processing file: {}".format(row['filename']))
                 print("    md5 : {}".format(row['md5']))
 
-                dup_list = pd.read_sql_query(
+                archive_list = pd.read_sql_query(
                              "SELECT * FROM media WHERE( type='{}' AND md5='{}' )".format(GLOBAL_TYPE_ARCHIVED,row['md5']),
                              database)
-                for i2,dup_row in dup_list.iterrows():
-                    print(u"    duplicate : {}".format(dup_row['full_filename']))
+                file_archived = False
+                for i2,arch_row in archive_list.iterrows():
+                    print(u"    duplicate : {}".format(arch_row['full_filename']))
+                    if not file_archived:
+                        file_archived = True
+                        fd.write(u"\n# archived file for {} found\n".format(row['full_filename']))
+                        fd.write(u"DIFF=\"\"\n"),
+                    fd.write(u"DIFF=\"$DIFF$(diff {} {})\"\n".format(escape_fname(row['full_filename']),
+                                                                     escape_fname(arch_row['full_filename'])))
                     
-        
+                if file_archived:
+                    fd.write(u"if [ \"$DIFF\" == \"\" ]\n")
+                    fd.write(u"then\n")
+                    fd.write(u"    echo \"file {} is archived\"\n".format(row['full_filename']))
+                    fd.write(u"else\n")
+                    fd.write(u"    echo \"diff failed! diff result: $DIFF\"\n")
+                    fd.write(u"fi\n")
+
         fd.close() 
         
         
@@ -245,6 +280,9 @@ def main():
                 
                 
     print("\nnumber of files processed: {}".format(num_files))
+    
+    if args.update_db:
+        update_db(database)
     
     database.close()
     

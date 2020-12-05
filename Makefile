@@ -15,3 +15,8 @@ script:
 	chmod +x script.sh
 	
 	
+help:
+	./pyphori.py -h
+	
+update:
+	./pyphori.py -u --database pyphori.db
